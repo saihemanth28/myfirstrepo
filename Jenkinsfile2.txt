@@ -1,0 +1,44 @@
+pipeline {
+    agent any
+    tools {
+        maven 'mymaven'
+    }
+    stages {
+        stage('Code') {
+            steps {
+                git "https://github.com/devops0014/one.git"
+            }
+        }
+        stage ("Build") {
+            steps {
+                sh 'mvn clean install'
+            }
+        }
+        stage ("CQA") {
+            steps {
+                withSonarQubeEnv('mysonar') {
+                    sh '''
+                         mvn clean verify
+                         org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+                        -Dsonar.projectKey=MyProject \
+                        -Dsonar.host.url=http://18.204.194.121:9000 \
+                        -Dsonar.login=7cd1702ff69229d434f0992e09d4e77e1cb4c162
+                    '''
+                }
+            }
+        }
+        stage ("QualityGates") {
+            steps {
+                waitForQualityGate abortPipeline: true, credentialsId: 'sonar'
+            }
+        }
+        stage ("Artifact") {
+            steps {
+                script {
+                    def pom = readMavenPom file: 'pom.xml'
+                    nexusArtifactUploader(artifacts: [[artifactId: pom.artifactId, classifier: '', file: "target/myweb.war", type: 'war']], credentialsId: 'nexus', groupId: pom.groupId, nexusUrl: '44.202.64.4:8081', nexusVersion: 'nexus3', protocol: 'http', repository: 'myrepo', version: pom.version)
+                }
+            }
+        }
+    }
+}
